@@ -13,6 +13,7 @@ from agents.models import (
     gpt_5_reasoning_settings_required,
     is_gpt_5_default,
 )
+from agents.models.default_models import _gpt_6_reasoning_settings_required
 
 
 def _gpt_5_default_settings(
@@ -119,6 +120,51 @@ def test_agent_uses_gpt_5_6_model_settings_from_default_model_env(
 def test_get_default_model_settings_returns_low_reasoning_defaults_for_base_gpt_5():
     assert get_default_model_settings("gpt-5") == _gpt_5_default_settings("low")
     assert get_default_model_settings("gpt-5-2025-08-07") == _gpt_5_default_settings("low")
+
+
+def test_gpt_6_reasoning_settings_required_detects_gpt_6_models_while_ignoring_chat_aliases():
+    assert _gpt_6_reasoning_settings_required("gpt-6-sol") is True
+    assert _gpt_6_reasoning_settings_required("gpt-6-luna") is True
+    assert _gpt_6_reasoning_settings_required("gpt-6-astra") is True
+    assert _gpt_6_reasoning_settings_required("gpt-6.1-sol") is True
+    assert _gpt_6_reasoning_settings_required("gpt-6-chat") is False
+    assert _gpt_6_reasoning_settings_required("gpt-6-chat-latest") is False
+    assert _gpt_6_reasoning_settings_required("gpt-4.1") is False
+
+
+@pytest.mark.parametrize("model", ["gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"])
+def test_get_default_model_settings_returns_none_reasoning_defaults_for_gpt_6_models(
+    model: str,
+):
+    assert get_default_model_settings(model) == _gpt_5_default_settings("none")
+
+
+def test_get_default_model_settings_returns_none_reasoning_defaults_for_gpt_6_snapshot_families():
+    assert get_default_model_settings("gpt-6-sol-2026-09-18") == _gpt_5_default_settings("none")
+    assert get_default_model_settings("gpt-6-luna-2026-09-18") == _gpt_5_default_settings("none")
+
+
+def test_get_default_model_settings_omits_reasoning_for_unconfirmed_gpt_6_variants():
+    assert get_default_model_settings("gpt-6") == _gpt_5_default_settings(None)
+    assert get_default_model_settings("gpt-6-astra") == _gpt_5_default_settings(None)
+
+
+def test_get_default_model_settings_returns_empty_settings_for_gpt_6_chat_aliases():
+    assert get_default_model_settings("gpt-6-chat") == ModelSettings()
+    assert get_default_model_settings("gpt-6-chat-latest") == ModelSettings()
+
+
+@pytest.mark.parametrize("model", ["gpt-6-sol", "gpt-6-luna"])
+def test_agent_uses_gpt_6_model_settings_from_default_model_env(
+    model: str, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("OPENAI_DEFAULT_MODEL", model.upper())
+
+    agent = Agent(name="test")
+
+    assert get_default_model() == model
+    assert agent.model is None
+    assert agent.model_settings == _gpt_5_default_settings("none")
 
 
 def test_get_default_model_settings_returns_low_reasoning_defaults_for_gpt_5_2_codex():

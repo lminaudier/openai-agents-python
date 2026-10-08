@@ -68,9 +68,30 @@ _GPT_5_DEFAULT_REASONING_EFFORT_PATTERNS: tuple[
     (re.compile(r"^gpt-5\.6-luna(?:-\d{4}-\d{2}-\d{2})?$"), "none"),
 )
 
+_GPT_6_CHAT_MODEL_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"^gpt-6-chat$"),
+    re.compile(r"^gpt-6-chat-latest$"),
+)
+
+# Reasoning effort defaults for GPT-6 models whose supported values are confirmed.
+# GPT-6 variants that are not listed here (e.g. "gpt-6", "gpt-6-astra") keep the
+# family verbosity default but omit reasoning.effort, mirroring how unconfirmed
+# GPT-5 variants are handled.
+_GPT_6_DEFAULT_REASONING_EFFORT_PATTERNS: tuple[
+    tuple[re.Pattern[str], GPT5DefaultReasoningEffort],
+    ...,
+] = (
+    (re.compile(r"^gpt-6-sol(?:-\d{4}-\d{2}-\d{2})?$"), "none"),
+    (re.compile(r"^gpt-6-luna(?:-\d{4}-\d{2}-\d{2})?$"), "none"),
+    (re.compile(r"^gpt-6\.1-sol(?:-\d{4}-\d{2}-\d{2})?$"), "none"),
+)
+
 
 def _get_default_reasoning_effort(model_name: str) -> GPT5DefaultReasoningEffort | None:
-    for pattern, effort in _GPT_5_DEFAULT_REASONING_EFFORT_PATTERNS:
+    for pattern, effort in (
+        *_GPT_5_DEFAULT_REASONING_EFFORT_PATTERNS,
+        *_GPT_6_DEFAULT_REASONING_EFFORT_PATTERNS,
+    ):
         if pattern.fullmatch(model_name):
             return effort
     return None
@@ -85,6 +106,17 @@ def gpt_5_reasoning_settings_required(model_name: str) -> bool:
         return False
     # matches any of gpt-5 models
     return model_name.startswith("gpt-5")
+
+
+def _gpt_6_reasoning_settings_required(model_name: str) -> bool:
+    """
+    Returns True if the model name is a GPT-6 model and reasoning settings are required.
+    """
+    if any(pattern.fullmatch(model_name) for pattern in _GPT_6_CHAT_MODEL_PATTERNS):
+        # Chat aliases do not accept reasoning.effort.
+        return False
+    # matches any of gpt-6 models
+    return model_name.startswith("gpt-6")
 
 
 def is_gpt_5_default() -> bool:
@@ -106,11 +138,11 @@ def get_default_model() -> str:
 def get_default_model_settings(model: str | None = None) -> ModelSettings:
     """
     Returns the default model settings.
-    If the default model is a GPT-5 model, returns the GPT-5 default model settings.
-    Otherwise, returns the legacy default model settings.
+    If the model is a GPT-5 or GPT-6 model, returns the corresponding default model
+    settings. Otherwise, returns the legacy default model settings.
     """
     _model = model if model is not None else get_default_model()
-    if gpt_5_reasoning_settings_required(_model):
+    if gpt_5_reasoning_settings_required(_model) or _gpt_6_reasoning_settings_required(_model):
         effort = _get_default_reasoning_effort(_model)
         if effort is not None:
             return copy.deepcopy(_GPT_5_DEFAULT_MODEL_SETTINGS_BY_REASONING_EFFORT[effort])
